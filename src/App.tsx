@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ClientDashboard } from './components/ClientDashboard';
-import { SemanticDashboard } from './components/SemanticDashboard';
+import ClientDashboard from './components/ClientDashboard';
+import SemanticDashboard from './components/SemanticDashboard';
 import { Users, Brain, BarChart3 } from 'lucide-react';
 
 type DashboardView = 'clients' | 'semantic';
