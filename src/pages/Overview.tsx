@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart2, Clock, Activity } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-interface SemanticData {
-  Name: string;
-  Duration: string;
-  Dissconnection_reason: string;
+interface CallData {
+  id: number;
+  name: string;
+  call_duration: number | null;
+  disconnection_reason: string | null;
 }
 
 const Overview: React.FC = () => {
@@ -13,66 +15,35 @@ const Overview: React.FC = () => {
     totalDuration: 0,
     avgDuration: 0,
   });
-  const [callData, setCallData] = useState<SemanticData[]>([]);
+  const [callData, setCallData] = useState<CallData[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  const CSV_URL =
-    'https://docs.google.com/spreadsheets/d/1qRyEXBZZbz8SSJs3Cd8yzFlDWkud4Cdmv8GnPnRIw1g/gviz/tq?tqx=out:csv';
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(CSV_URL);
-        if (!response.ok) throw new Error('Failed to fetch data');
+        const { data, error } = await supabase
+          .from('call_history')
+          .select('id, name, call_duration, disconnection_reason')
+          .order('created_at', { ascending: false });
 
-        const csvText = await response.text();
-        const { data } = parseCsv(csvText);
-        setCallData(data);
-        calculateKpis(data);
+        if (error) throw error;
+
+        setCallData(data || []);
+        calculateKpis(data || []);
       } catch (err: any) {
-        setError(err.message);
+        console.error('Error fetching call data:', err);
+        setError(err.message || 'Failed to fetch data');
       }
     };
 
     fetchData();
   }, []);
 
-  const parseCsv = (csvText: string): { data: SemanticData[] } => {
-    const lines = csvText.trim().split(/\r\n|\n|\r/).filter(Boolean);
-    if (lines.length < 2) return { data: [] };
-
-    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
-    const nameIdx = headers.findIndex(h => /name/i.test(h));
-    const durationIdx = headers.findIndex(h => /duration/i.test(h));
-    const reasonIdx = headers.findIndex(h => /diss?connection/i.test(h));
-
-    const allRows = lines.slice(1).map(line => {
-      const values = line.split(/,(?=(?:(?:[^\"]*\"){2})*[^\"]*$)/);
-      return {
-        Name: values[nameIdx]?.replace(/"/g, '').trim() || '',
-        Duration: values[durationIdx]?.replace(/"/g, '').trim() || '',
-        Dissconnection_reason: values[reasonIdx]?.replace(/"/g, '').trim() || '',
-      };
-    });
-
-    const validRows = allRows.filter(
-      row => row.Name && row.Duration && !isNaN(parseFloat(row.Duration))
-    );
-
-    // 🧠 Debug log
-    console.log('📊 CSV Debug Info:');
-    console.log('Total Rows (including blanks):', allRows.length);
-    console.log('Valid Data Rows:', validRows.length);
-    console.log('Skipped Empty/Invalid Rows:', allRows.length - validRows.length);
-
-    return { data: validRows };
-  };
-
-  const calculateKpis = (data: SemanticData[]) => {
+  const calculateKpis = (data: CallData[]) => {
     const totalCalls = data.length;
     const durations = data
-      .map(row => parseFloat(row.Duration))
-      .filter(d => Number.isFinite(d));
+      .map(row => row.call_duration)
+      .filter((d): d is number => d !== null && Number.isFinite(d));
 
     const totalDuration = durations.reduce((a, b) => a + b, 0);
     const avgDuration = durations.length > 0 ? totalDuration / durations.length : 0;
@@ -127,11 +98,11 @@ const Overview: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {callData.map((row, index) => (
-                      <tr key={index}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.Name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.Duration}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.Dissconnection_reason}</td>
+                    {callData.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.call_duration || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.disconnection_reason || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

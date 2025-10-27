@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Phone, MapPin, Home, Search, Filter, Download, TrendingUp, DollarSign, Users, ArrowUpDown, Calendar } from "lucide-react";
-import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
+import { Phone, Search, Download, Users, ArrowUpDown, Calendar } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 // Define the structure of a client call object
 type ClientCall = {
   id: number;
   created_at: string;
+  caller_number: string;
+  recipient_number: string;
+  call_duration: number | null;
+  recording_url: string | null;
+  transcript: string | null;
+  tour_date: string | null;
   name: string;
-  phone: string;
-  location: string | null;
-  property_type: string | null;
-  budget: number | null;
 };
 
 // Main component
@@ -19,82 +21,33 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState<string>("all");
   const [sortField, setSortField] = useState<keyof ClientCall | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
-    const fetchClientsFromGoogleSheet = async () => {
-      const SHEET_ID = "1Nz0fefTDxNPqABTnDe8qkNgjbm3uz6jW7nV6RGRsEM4";
-      const SHEET_NAME = "Sheet1";
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
+    const fetchClients = async () => {
+      const { data, error } = await supabase.from('call_history').select('*');
 
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Network response was not ok");
-
-        const text = await response.text();
-        const jsonString = text.match(/\((.*)\)/)?.[1];
-        if (!jsonString) throw new Error("Failed to parse JSONP response.");
-
-        const data = JSON.parse(jsonString);
-        const headers = data.table.cols.map((col: { label: string }) =>
-          col.label.toLowerCase().replace(/\s+/g, "_")
-        );
-        const rows = data.table.rows;
-
-        const formattedClients: ClientCall[] = rows
-          .map((row: { c: ({ v: any } | null)[] }, index: number) => {
-            const client: any = {};
-            headers.forEach((header: string, i: number) => {
-              const cell = row.c[i];
-              const value = cell ? cell.v : null;
-
-              // Budget
-              if (header === "budget" && typeof value === "number") {
-                client.budget = value;
-              }
-              // Default field assignment
-              else {
-                client[header] = value;
-              }
-            });
-
-            client.id = client.id || index;
-            return client as ClientCall;
-          })
-          .sort(
-            (a: ClientCall, b: ClientCall) =>
-              new Date(b.created_at ?? 0).getTime() -
-              new Date(a.created_at ?? 0).getTime()
-          );
-
-        setClients(formattedClients);
-      } catch (err) {
-        console.error("Error fetching clients:", err);
-        setError(
-          "Failed to load client data. Please check the Google Sheet link and permissions."
-        );
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.error("Error fetching clients:", error);
+        setError("Failed to load client data. Please check your Supabase connection.");
+      } else {
+        setClients(data as ClientCall[]);
       }
+      setLoading(false);
     };
 
-    fetchClientsFromGoogleSheet();
-    
+    fetchClients();
   }, []);
 
   // Filter and sort logic
   const filteredClients = useMemo(() => {
     let filtered = clients.filter((client) => {
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch =
+      return (
         client.name?.toLowerCase().includes(searchLower) ||
-        client.phone?.includes(searchTerm) ||
-        client.location?.toLowerCase().includes(searchLower);
-      const matchesFilter =
-        filterType === "all" || client.property_type === filterType;
-      return matchesSearch && matchesFilter;
+        client.caller_number?.includes(searchTerm)
+      );
     });
 
     // Apply sorting
@@ -116,66 +69,26 @@ export default function ClientDashboard() {
     }
 
     return filtered;
-  }, [clients, searchTerm, filterType, sortField, sortDirection]);
-
-  // Unique property types
-  const propertyTypes = [
-    ...new Set(clients.map((c) => c.property_type).filter(Boolean)),
-  ];
+  }, [clients, searchTerm, sortField, sortDirection]);
 
   // Enhanced Stats
   const stats = useMemo(() => {
-    const validBudgets = clients.filter(c => c.budget).map(c => c.budget!);
-    const avgBudget = validBudgets.length > 0 
-      ? validBudgets.reduce((sum, b) => sum + b, 0) / validBudgets.length 
-      : 0;
-    const maxBudget = validBudgets.length > 0 ? Math.max(...validBudgets) : 0;
-    
     return {
       total: clients.length,
-      locations: new Set(clients.map((c) => c.location).filter(Boolean)).size,
-      avgBudget,
-      maxBudget,
       filtered: filteredClients.length,
     };
   }, [clients, filteredClients]);
 
-  // Chart data
-  const propertyTypeData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    clients.forEach(c => {
-      if (c.property_type) {
-        counts[c.property_type] = (counts[c.property_type] || 0) + 1;
-      }
-    });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [clients]);
-
-  const locationData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    clients.forEach(c => {
-      if (c.location) {
-        counts[c.location] = (counts[c.location] || 0) + 1;
-      }
-    });
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-  }, [clients]);
-
-  const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1', '#14b8a6', '#f97316'];
-
   // Export functionality
   const handleExport = () => {
     const csvContent = [
-      ['Name', 'Phone', 'Location', 'Property Type', 'Budget', 'Created At'],
+      ['Name', 'Caller Number', 'Recipient Number', 'Call Duration', 'Tour Date', 'Created At'],
       ...filteredClients.map(c => [
         c.name || '',
-        c.phone || '',
-        c.location || '',
-        c.property_type || '',
-        c.budget?.toString() || '',
+        c.caller_number || '',
+        c.recipient_number || '',
+        c.call_duration?.toString() || '',
+        c.tour_date || '',
         c.created_at || ''
       ])
     ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
@@ -238,68 +151,11 @@ export default function ClientDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             icon={Users}
-            title="Total Clients"
+            title="Total Calls"
             value={stats.total.toString()}
             subtitle={`${stats.filtered} shown`}
             color="blue"
           />
-          <StatCard
-            icon={MapPin}
-            title="Unique Locations"
-            value={stats.locations.toString()}
-            color="purple"
-          />
-          <StatCard
-            icon={DollarSign}
-            title="Avg Budget"
-            value={`₹${(stats.avgBudget / 100000).toFixed(1)}L`}
-            color="green"
-          />
-          <StatCard
-            icon={TrendingUp}
-            title="Max Budget"
-            value={`₹${(stats.maxBudget / 100000).toFixed(1)}L`}
-            color="orange"
-          />
-        </div>
-
-        {/* Visualizations */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Property Type Distribution</h2>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={propertyTypeData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {propertyTypeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Top Locations</h2>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={locationData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
         </div>
 
         {/* Filters */}
@@ -309,25 +165,11 @@ export default function ClientDashboard() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by name, phone, or location..."
+                placeholder="Search by name or phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               />
-            </div>
-
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="w-full sm:w-auto pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white transition"
-              >
-                <option value="all">All Property Types</option>
-                {propertyTypes.map(
-                  (type) => type && <option key={type}>{type}</option>
-                )}
-              </select>
             </div>
           </div>
 
@@ -346,32 +188,23 @@ export default function ClientDashboard() {
                     </div>
                   </th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Phone
+                    Caller Number
                   </th>
                   <th 
                     className="text-left py-3 px-4 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => handleSort('location')}
+                    onClick={() => handleSort('tour_date')}
                   >
                     <div className="flex items-center gap-1">
-                      Location
+                      Tour Date
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
                   <th 
                     className="text-left py-3 px-4 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => handleSort('property_type')}
+                    onClick={() => handleSort('call_duration')}
                   >
                     <div className="flex items-center gap-1">
-                      Property Type
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left py-3 px-4 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => handleSort('budget')}
-                  >
-                    <div className="flex items-center gap-1">
-                      Budget
+                      Call Duration (s)
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -387,7 +220,7 @@ export default function ClientDashboard() {
                 {filteredClients.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={5}
                       className="text-center py-8 text-gray-500"
                     >
                       No clients found matching your criteria.
@@ -404,37 +237,17 @@ export default function ClientDashboard() {
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600 flex items-center gap-2">
                         <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        {client.phone}
+                        {client.caller_number}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">
-                        {client.location ? (
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            {client.location}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-sm">
-                        {client.property_type ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                            <Home className="w-3 h-3" />
-                            {client.property_type}
-                          </span>
+                        {client.tour_date ? (
+                          new Date(client.tour_date).toLocaleDateString()
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
                       <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                        {client.budget ? (
-                          <span className="flex items-center gap-1.5 text-green-700">
-                            <span className="text-green-500">₹</span>
-                            {client.budget.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                        {client.call_duration}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">
                         {client.created_at ? (

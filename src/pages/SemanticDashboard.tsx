@@ -1,83 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  BarChart2,
-  Settings,
-  Phone,
-  Mic,
-  Bell,
-  MessageSquare,
-  Users,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
   Search,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-
-
+import { supabase } from '../lib/supabase';
 
 interface SemanticData {
-  [key: string]: string;
-}
-
-const SemanticCard = ({ data, headers }) => {
-    return (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {headers.map((header) => (
-                    <div key={header}>
-                        <p className="text-sm font-medium text-gray-500">{header.replace(/_/g, ' ')}</p>
-                        <p className="text-lg font-semibold text-gray-800">{data[header]}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const RangeFilter = ({ title, min, max, step, value, onChange }) => {
-    return (
-        <div>
-            <label className="text-sm font-medium text-gray-700">{title}</label>
-            <div className="flex items-center space-x-4">
-                <span>{min}</span>
-                <input
-                    type="range"
-                    min={min}
-                    max={max}
-                    step={step}
-                    value={value}
-                    onChange={(e) => onChange(parseFloat(e.target.value))}
-                    className="w-full"
-                />
-                <span>{max}</span>
-            </div>
-            <div className="text-center">{value}</div>
-        </div>
-    )
+  id: string;
+  client_call_id: string | null;
+  sentiment_score: number | null;
+  agent_confidence: number | null;
+  positive_indicators: string[];
+  negative_indicators: string[];
+  predicted_outcome: string | null;
+  alert_status: string;
+  finish_reason: string | null;
+  avg_logprobs: number | null;
+  conversation_duration_seconds: number | null;
+  total_customer_words: number | null;
+  agent_talk_time_percentage: number | null;
+  buying_signals: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 const SemanticDashboard = () => {
   
   const [data, setData] = useState<SemanticData[]>([]);
-  const [headers, setHeaders] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sentimentScore, setSentimentScore] = useState(0);
-  const [agentConfidence, setAgentConfidence] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('https://docs.google.com/spreadsheets/d/17p_gFOSGYxXt1i9qM3W1BIG5VZdBxjxUrx5Fi_MiLnY/gviz/tq?tqx=out:csv');
-        if (!response.ok) {
-          throw new Error('Failed to fetch data');
+        const { data, error } = await supabase.from('semantic_analysis').select('*');
+        if (error) {
+          throw error;
         }
-        const csvText = await response.text();
-        const { data, headers } = parseCsv(csvText);
-        setData(data);
-        setHeaders(headers);
-      } catch (error) {
+        setData(data as SemanticData[]);
+      } catch (error: any) {
         setError(error.message);
       }
     };
@@ -85,56 +46,23 @@ const SemanticDashboard = () => {
     fetchData();
   }, []);
 
-  const parseCsv = (csvText: string): { data: SemanticData[], headers: string[] } => {
-    const lines = csvText.trim().split('\n');
-    const headers = lines[0].split(',').map(header => header.replace(/"/g, '').trim());
-    const data = lines.slice(1).map(line => {
-        const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        return headers.reduce((obj, header, index) => {
-            const value = values[index] || '';
-            obj[header] = value.replace(/"/g, '').trim();
-            return obj;
-        }, {} as SemanticData);
-    });
-    return { data, headers };
-  };
-
-  const sentimentScores = data.map(row => parseFloat(row.sentiment_score)).filter(score => !isNaN(score));
-  const minSentimentScore = sentimentScores.length > 0 ? Math.min(...sentimentScores) : 0;
-  const maxSentimentScore = sentimentScores.length > 0 ? Math.max(...sentimentScores) : 1;
-
-  const agentConfidences = data.map(row => parseFloat(row.agent_confidence)).filter(conf => !isNaN(conf));
-  const minAgentConfidence = agentConfidences.length > 0 ? Math.min(...agentConfidences) : 0;
-  const maxAgentConfidence = agentConfidences.length > 0 ? Math.max(...agentConfidences) : 10;
-
-  const filteredData = data.filter((row) => {
-    const searchFilter = Object.values(row).some((value) =>
-      value.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const sentimentScoreFilter = row.sentiment_score ? parseFloat(row.sentiment_score) >= sentimentScore : true;
-    const agentConfidenceFilter = row.agent_confidence ? parseFloat(row.agent_confidence) >= agentConfidence : true;
-
-    return searchFilter && sentimentScoreFilter && agentConfidenceFilter;
-  });
-
   const outcomeData = data.reduce((acc, row) => {
     const outcome = row.predicted_outcome;
     if (outcome) {
       acc[outcome] = (acc[outcome] || 0) + 1;
     }
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
   const outcomeChartData = Object.keys(outcomeData).map(key => ({ name: key, value: outcomeData[key] }));
 
   const alertData = data.reduce((acc, row) => {
-    const alert = row['Alert Status'];
+    const alert = row.alert_status;
     if (alert) {
       acc[alert] = (acc[alert] || 0) + 1;
     }
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
   const alertChartData = Object.keys(alertData).map(key => ({ name: key, value: alertData[key] }));
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -145,7 +73,7 @@ const SemanticDashboard = () => {
         <header className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Semantic Analysis</h1>
-            <p className="text-gray-500">Analysis of call data from Google Sheet</p>
+            <p className="text-gray-500">Analysis of call data from Supabase</p>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -162,10 +90,6 @@ const SemanticDashboard = () => {
             <div className="text-red-500 bg-red-100 p-4 rounded-lg">{error}</div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                <RangeFilter title="Sentiment Score" min={minSentimentScore} max={maxSentimentScore} step={0.1} value={sentimentScore} onChange={setSentimentScore} />
-                <RangeFilter title="Agent Confidence" min={minAgentConfidence} max={maxAgentConfidence} step={0.5} value={agentConfidence} onChange={setAgentConfidence} />
-            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Predicted Outcome</h2>
@@ -206,16 +130,63 @@ const SemanticDashboard = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
-                {filteredData.length > 0 ? (
-                    filteredData.map((row, index) => (
-                        <SemanticCard key={index} data={row} headers={headers} />
-                    ))
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="overflow-x-auto">
+                {data.length > 0 ? (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Call ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sentiment Score</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Confidence</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Predicted Outcome</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alert Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration (s)</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Words</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Talk %</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {data.map((row) => (
+                        <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{String(row.id).substring(0, 8)}...</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.client_call_id ? String(row.client_call_id).substring(0, 8) + '...' : '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              row.sentiment_score && row.sentiment_score > 0.5 ? 'bg-green-100 text-green-800' : 
+                              row.sentiment_score && row.sentiment_score < -0.5 ? 'bg-red-100 text-red-800' : 
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {row.sentiment_score?.toFixed(2) || '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.agent_confidence?.toFixed(2) || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.predicted_outcome || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              row.alert_status === 'high' ? 'bg-red-100 text-red-800' :
+                              row.alert_status === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {row.alert_status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.conversation_duration_seconds || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.total_customer_words || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.agent_talk_time_percentage?.toFixed(1) || '-'}%</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(row.created_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 ) : (
-                    <div className="col-span-full text-center text-gray-500">
-                        {data.length > 0 ? 'No results found.' : 'Loading data...'}
-                    </div>
+                  <div className="text-center py-12 text-gray-500">
+                    {data.length > 0 ? 'No results found.' : 'Loading data...'}
+                  </div>
                 )}
+              </div>
             </div>
           </>
         )}

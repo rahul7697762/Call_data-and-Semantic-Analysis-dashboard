@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from "../lib/supabase";
 
 interface ConversationLine {
   speaker: string;
@@ -12,14 +13,23 @@ const ConversationPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('https://docs.google.com/spreadsheets/d/1qRyEXBZZbz8SSJs3Cd8yzFlDWkud4Cdmv8GnPnRIw1g/gviz/tq?tqx=out:csv');
-        if (!response.ok) {
-          throw new Error('Failed to fetch data');
+        // TODO: Get the call ID from the URL or props
+        // For now, fetching the first call's transcript
+        const { data, error } = await supabase
+          .from('call_history')
+          .select('transcript')
+          .limit(1)
+          .single();
+
+        if (error) {
+          throw error;
         }
-        const csvText = await response.text();
-        const parsedData = parseCsv(csvText);
-        setConversation(parsedData);
-      } catch (error) {
+
+        if (data && data.transcript) {
+          const parsedData = parseTranscript(data.transcript);
+          setConversation(parsedData);
+        }
+      } catch (error: any) {
         setError(error.message);
       }
     };
@@ -27,14 +37,13 @@ const ConversationPage: React.FC = () => {
     fetchData();
   }, []);
 
-  const parseCsv = (csvText: string): ConversationLine[] => {
-    const lines = csvText.trim().split('\n').slice(1); // Skip header row
+  const parseTranscript = (transcript: string): ConversationLine[] => {
+    const lines = transcript.trim().split('\n');
     return lines.map(line => {
-      const values = line.split(/,(?=(?:(?:[^\"]*\"){2})*[^\"]*$)/);
-      return {
-        speaker: values[0]?.replace(/\"/g, '').trim() || '',
-        line: values[1]?.replace(/\"/g, '').trim() || ''
-      };
+      const parts = line.split(':');
+      const speaker = parts[0]?.trim() || '';
+      const lineText = parts.slice(1).join(':').trim() || '';
+      return { speaker, line: lineText };
     });
   };
 

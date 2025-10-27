@@ -1,36 +1,42 @@
 export interface Database {
   public: {
     Tables: {
-      client_calls: {
+      call_history: {
         Row: {
-          id: string;
-          name: string;
-          phone: string;
-          location: string | null;
-          property_type: string | null;
-          budget: number | null;
+          id: number;
           created_at: string;
-          updated_at: string;
+          caller_number: string;
+          recipient_number: string;
+          call_duration: number | null;
+          recording_url: string | null;
+          transcript: string | null;
+          tour_date: string | null;
+          name: string;
+          disconnection_reason: string | null;
         };
         Insert: {
-          id?: string;
-          name: string;
-          phone: string;
-          location?: string | null;
-          property_type?: string | null;
-          budget?: number | null;
+          id?: number;
           created_at?: string;
-          updated_at?: string;
+          caller_number: string;
+          recipient_number: string;
+          call_duration?: number | null;
+          recording_url?: string | null;
+          transcript?: string | null;
+          tour_date?: string | null;
+          name: string;
+          disconnection_reason?: string | null;
         };
         Update: {
-          id?: string;
-          name?: string;
-          phone?: string;
-          location?: string | null;
-          property_type?: string | null;
-          budget?: number | null;
+          id?: number;
           created_at?: string;
-          updated_at?: string;
+          caller_number?: string;
+          recipient_number?: string;
+          call_duration?: number | null;
+          recording_url?: string | null;
+          transcript?: string | null;
+          tour_date?: string | null;
+          name?: string;
+          disconnection_reason?: string | null;
         };
       };
       semantic_analysis: {
