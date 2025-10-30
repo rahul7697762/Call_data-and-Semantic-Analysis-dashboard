@@ -28,7 +28,7 @@ const SemanticDashboard = () => {
   
   const [data, setData] = useState<SemanticData[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  ;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,15 +75,7 @@ const SemanticDashboard = () => {
             <h1 className="text-3xl font-bold text-gray-800">Semantic Analysis</h1>
             <p className="text-gray-500">Analysis of call data from Supabase</p>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search data..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-64"
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+          
         </header>
 
         {error ? (
@@ -137,7 +129,7 @@ const SemanticDashboard = () => {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Call ID</th>
+                        
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sentiment Score</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Confidence</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Predicted Outcome</th>
@@ -152,7 +144,7 @@ const SemanticDashboard = () => {
                       {data.map((row) => (
                         <tr key={row.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{String(row.id).substring(0, 8)}...</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.client_call_id ? String(row.client_call_id).substring(0, 8) + '...' : '-'}</td>
+                         
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                               row.sentiment_score && row.sentiment_score > 0.5 ? 'bg-green-100 text-green-800' : 
