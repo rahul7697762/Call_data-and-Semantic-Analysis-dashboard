@@ -62,7 +62,7 @@ const Overview: React.FC = () => {
   ];
 
   return (
-    <div className="p-6">
+    <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-8">Overview</h1>
 
       {error ? (

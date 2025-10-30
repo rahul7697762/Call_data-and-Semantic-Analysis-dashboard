@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
-import {
-  Search,
-} from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Download, Filter, X } from 'lucide-react';
+import { format, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '../lib/supabase';
 
@@ -28,7 +27,13 @@ const SemanticDashboard = () => {
   
   const [data, setData] = useState<SemanticData[]>([]);
   const [error, setError] = useState<string | null>(null);
-  ;
+  const [filters, setFilters] = useState({
+    minSentiment: -1,
+    maxSentiment: 1,
+    startDate: subDays(new Date(), 30).toISOString().split('T')[0], // 30 days ago
+    endDate: new Date().toISOString().split('T')[0] // Today
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,6 +50,56 @@ const SemanticDashboard = () => {
 
     fetchData();
   }, []);
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: name.includes('Sentiment') ? parseFloat(value) : value
+    }));
+  };
+
+  const exportToCSV = () => {
+    const headers = [
+      'ID', 'Sentiment Score', 'Agent Confidence', 'Predicted Outcome',
+      'Alert Status', 'Duration (s)', 'Customer Words', 'Agent Talk %', 'Created At'
+    ].join(',');
+
+    const csvContent = filteredData.map(row => [
+      row.id,
+      row.sentiment_score?.toFixed(2) || '',
+      row.agent_confidence?.toFixed(2) || '',
+      `"${row.predicted_outcome || ''}"`,
+      `"${row.alert_status || ''}"`,
+      row.conversation_duration_seconds || '',
+      row.total_customer_words || '',
+      row.agent_talk_time_percentage?.toFixed(1) || '',
+      new Date(row.created_at).toISOString()
+    ].join(','));
+
+    const csv = [headers, ...csvContent].join('');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `call_data_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const itemDate = new Date(item.created_at).toISOString().split('T')[0];
+      const sentiment = item.sentiment_score || 0;
+      return (
+        sentiment >= filters.minSentiment &&
+        sentiment <= filters.maxSentiment &&
+        itemDate >= filters.startDate &&
+        itemDate <= filters.endDate
+      );
+    });
+  }, [data, filters]);
 
   const outcomeData = data.reduce((acc, row) => {
     const outcome = row.predicted_outcome;
@@ -68,15 +123,94 @@ const SemanticDashboard = () => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
   return (
-    <div className="h-screen bg-gray-100">
-      <main className="p-8 overflow-y-auto">
-        <header className="flex items-center justify-between mb-8">
+    <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8">
+      <main>
+        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Semantic Analysis</h1>
             <p className="text-gray-500">Analysis of call data from Supabase</p>
           </div>
-          
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Filter size={18} />
+              <span>Filters</span>
+            </button>
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Download size={18} />
+              <span>Export CSV</span>
+            </button>
+          </div>
         </header>
+
+        {showFilters && (
+          <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-medium text-gray-800">Filters</h3>
+              <button onClick={() => setShowFilters(false)} className="text-gray-500 hover:text-gray-700">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Min Sentiment</label>
+                <input
+                  type="range"
+                  name="minSentiment"
+                  min="-1"
+                  max="1"
+                  step="0.1"
+                  value={filters.minSentiment}
+                  onChange={handleFilterChange}
+                  className="w-full"
+                />
+                <div className="text-sm text-gray-600">{filters.minSentiment.toFixed(1)}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Max Sentiment</label>
+                <input
+                  type="range"
+                  name="maxSentiment"
+                  min="-1"
+                  max="1"
+                  step="0.1"
+                  value={filters.maxSentiment}
+                  onChange={handleFilterChange}
+                  className="w-full"
+                />
+                <div className="text-sm text-gray-600">{filters.maxSentiment.toFixed(1)}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  name="startDate"
+                  value={filters.startDate}
+                  onChange={handleFilterChange}
+                  className="w-full p-2 border rounded-md"
+                  max={filters.endDate}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  name="endDate"
+                  value={filters.endDate}
+                  onChange={handleFilterChange}
+                  className="w-full p-2 border rounded-md"
+                  min={filters.startDate}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {error ? (
             <div className="text-red-500 bg-red-100 p-4 rounded-lg">{error}</div>
@@ -124,7 +258,7 @@ const SemanticDashboard = () => {
 
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="overflow-x-auto">
-                {data.length > 0 ? (
+                {filteredData.length > 0 ? (
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -141,9 +275,9 @@ const SemanticDashboard = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {data.map((row) => (
+                      {filteredData.map((row) => (
                         <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{String(row.id).substring(0, 8)}...</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{String(row.id).substring(0, 8)}</td>
                          
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -175,7 +309,7 @@ const SemanticDashboard = () => {
                   </table>
                 ) : (
                   <div className="text-center py-12 text-gray-500">
-                    {data.length > 0 ? 'No results found.' : 'Loading data...'}
+                    {data.length === 0 ? 'Loading data...' : 'No results match your filters.'}
                   </div>
                 )}
               </div>

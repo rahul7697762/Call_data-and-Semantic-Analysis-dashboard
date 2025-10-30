@@ -11,7 +11,7 @@ function App() {
   return (
     <div className="flex">
       <SidePanel />
-      <main className="flex-1 p-8 bg-gray-100">
+      <main className="flex-1">
         <Routes>
           <Route path="/overview" element={<Overview />} />
           <Route path="/" element={<SemanticDashboard />} />

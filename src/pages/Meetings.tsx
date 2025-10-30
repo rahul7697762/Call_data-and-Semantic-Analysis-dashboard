@@ -35,7 +35,7 @@ const Meetings: React.FC = () => {
   }, []);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Upcoming Tours & Meetings</h1>
       {loading && <p>Loading meetings...</p>}
       {error && <p className="text-red-500">{error}</p>}
